@@ -26,5 +26,8 @@ frontend/pubspec.lock
 pgdata/
 miniodata/
 
+# Test outputs
+*.mp3
+
 # OS
 Thumbs.db

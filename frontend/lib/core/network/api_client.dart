@@ -3,16 +3,20 @@ import '../constants/api_constants.dart';
 import '../storage/secure_storage.dart';
 
 class ApiClient {
-  late final Dio _dio;
+  static final ApiClient _instance = ApiClient._();
+  static ApiClient get instance => _instance;
 
-  ApiClient() {
-    _dio = Dio(BaseOptions(
+  late final Dio dio;
+
+  ApiClient._() {
+    dio = Dio(BaseOptions(
       baseUrl: ApiConstants.baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 30),
+      headers: {'Content-Type': 'application/json'},
     ));
 
-    _dio.interceptors.add(InterceptorsWrapper(
+    dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await SecureStorage.getToken();
         if (token != null) {
@@ -20,17 +24,12 @@ class ApiClient {
         }
         handler.next(options);
       },
+      onError: (error, handler) {
+        if (error.response?.statusCode == 401) {
+          SecureStorage.deleteToken();
+        }
+        handler.next(error);
+      },
     ));
   }
-
-  Future<Response> get(String path, {Map<String, dynamic>? params}) =>
-      _dio.get(path, queryParameters: params);
-
-  Future<Response> post(String path, {dynamic data}) =>
-      _dio.post(path, data: data);
-
-  Future<Response> put(String path, {dynamic data}) =>
-      _dio.put(path, data: data);
-
-  Future<Response> delete(String path) => _dio.delete(path);
 }

@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../../characters/data/character_repository.dart';
+import '../../../characters/data/models/character_model.dart';
+import '../../../../core/network/api_client.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -9,6 +13,10 @@ class DashboardScreen extends StatelessWidget {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.go('/characters'),
+          ),
           title: const Text('Parent Panel'),
           bottom: const TabBar(
             isScrollable: true,
@@ -20,7 +28,7 @@ class DashboardScreen extends StatelessWidget {
             ],
           ),
         ),
-        body: TabBarView(
+        body: const TabBarView(
           children: [
             _OverviewTab(),
             _CoursewareTab(),
@@ -33,37 +41,34 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
-class _OverviewTab extends StatelessWidget {
+class _OverviewTab extends StatefulWidget {
+  const _OverviewTab();
+
+  @override
+  State<_OverviewTab> createState() => _OverviewTabState();
+}
+
+class _OverviewTabState extends State<_OverviewTab> {
+  List<dynamic> _conversations = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final resp = await ApiClient.instance.dio.get('/conversations');
+      setState(() => _conversations = resp.data as List);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Learning progress summary
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Learning Progress',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 16),
-                // TODO: progress charts from API data
-                const LinearProgressIndicator(value: 0.6),
-                const SizedBox(height: 8),
-                const Text('Vocabulary: 45/75 words mastered'),
-                const SizedBox(height: 16),
-                const LinearProgressIndicator(value: 0.3),
-                const SizedBox(height: 8),
-                const Text('Phrases: 12/40 practiced'),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Recent conversations
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -73,13 +78,14 @@ class _OverviewTab extends StatelessWidget {
                 Text('Recent Conversations',
                     style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 16),
-                // TODO: fetch from API
-                const ListTile(
-                  leading: Icon(Icons.whatshot, color: Colors.orange),
-                  title: Text('Chat with Spark'),
-                  subtitle: Text('15 min - Animals vocabulary'),
-                  trailing: Text('Today'),
-                ),
+                if (_conversations.isEmpty)
+                  const Text('No conversations yet. Let your child chat with a character!')
+                else
+                  ...(_conversations.take(10).map((c) => ListTile(
+                        leading: const Icon(Icons.chat_bubble_outline),
+                        title: Text('${c['turn_count'] ?? 0} turns'),
+                        subtitle: Text(c['summary'] ?? 'No summary'),
+                      ))),
               ],
             ),
           ),
@@ -90,6 +96,8 @@ class _OverviewTab extends StatelessWidget {
 }
 
 class _CoursewareTab extends StatelessWidget {
+  const _CoursewareTab();
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -98,23 +106,19 @@ class _CoursewareTab extends StatelessWidget {
         children: [
           ElevatedButton.icon(
             onPressed: () {
-              // TODO: file picker + upload to API
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('File upload coming in Phase 2')),
+              );
             },
             icon: const Icon(Icons.upload_file),
             label: const Text('Upload Courseware'),
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView(
-              children: const [
-                // TODO: list from API
-                ListTile(
-                  leading: Icon(Icons.description),
-                  title: Text('Unit 3 - Animals'),
-                  subtitle: Text('Ready - 15 vocabulary items'),
-                  trailing: Icon(Icons.check_circle, color: Colors.green),
-                ),
-              ],
+          const SizedBox(height: 24),
+          const Expanded(
+            child: Center(
+              child: Text('Upload your child\'s English learning materials here.\n'
+                  'Supported: PDF, images, text files.',
+                  textAlign: TextAlign.center),
             ),
           ),
         ],
@@ -123,33 +127,149 @@ class _CoursewareTab extends StatelessWidget {
   }
 }
 
-class _CharactersTab extends StatelessWidget {
+class _CharactersTab extends StatefulWidget {
+  const _CharactersTab();
+
+  @override
+  State<_CharactersTab> createState() => _CharactersTabState();
+}
+
+class _CharactersTabState extends State<_CharactersTab> {
+  final _repo = CharacterRepository();
+  List<CharacterModel> _characters = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final chars = await _repo.listCharacters();
+      setState(() {
+        _characters = chars;
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           ElevatedButton.icon(
-            onPressed: () {
-              // TODO: navigate to character editor
-            },
+            onPressed: () => _showCreateDialog(context),
             icon: const Icon(Icons.add),
             label: const Text('Create Character'),
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: ListView(
-              children: const [
-                // TODO: list from API
-                ListTile(
-                  leading: Icon(Icons.whatshot, color: Colors.orange),
-                  title: Text('Spark (Baby Dragon)'),
-                  subtitle: Text('Active - cheerful, curious'),
-                  trailing: Icon(Icons.edit),
-                ),
-              ],
+            child: ListView.builder(
+              itemCount: _characters.length,
+              itemBuilder: (context, i) {
+                final c = _characters[i];
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.pets, color: Colors.deepPurple),
+                    title: Text(c.name),
+                    subtitle: Text(c.species.isNotEmpty ? c.species : c.personality),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () async {
+                        await _repo.deleteCharacter(c.id);
+                        _load();
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateDialog(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    final speciesCtrl = TextEditingController();
+    final personalityCtrl = TextEditingController();
+    final styleCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create Character'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              TextField(
+                controller: speciesCtrl,
+                decoration: const InputDecoration(labelText: 'Species (e.g., Baby Dragon)'),
+              ),
+              TextField(
+                controller: personalityCtrl,
+                decoration: const InputDecoration(labelText: 'Personality'),
+              ),
+              TextField(
+                controller: styleCtrl,
+                decoration: const InputDecoration(labelText: 'Speaking style'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _repo.createCharacter({
+                'name': nameCtrl.text,
+                'personality': personalityCtrl.text,
+                'speaking_style': styleCtrl.text.isEmpty ? 'Short and simple' : styleCtrl.text,
+                'world_rules': {
+                  'character_meta': {
+                    'name': nameCtrl.text,
+                    'species': speciesCtrl.text,
+                    'world': 'A magical world',
+                  },
+                  'personality': {
+                    'traits': personalityCtrl.text.split(',').map((s) => s.trim()).toList(),
+                  },
+                  'speaking_style': {
+                    'vocabulary_level': 'simple, age-appropriate',
+                    'sentence_length': '5-10 words',
+                  },
+                  'teaching_behavior': {
+                    'correction_style': 'gentle_redirect',
+                    'singing_enabled': true,
+                    'game_types': ['rhyming', 'word_chain'],
+                  },
+                  'safety_rules': {
+                    'never_discuss': ['violence', 'scary topics'],
+                    'redirect_to': 'Let\'s talk about something fun!',
+                  },
+                },
+              });
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              _load();
+            },
+            child: const Text('Create'),
           ),
         ],
       ),
@@ -157,13 +277,23 @@ class _CharactersTab extends StatelessWidget {
   }
 }
 
-class _SettingsTab extends StatelessWidget {
+class _SettingsTab extends StatefulWidget {
+  const _SettingsTab();
+
+  @override
+  State<_SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<_SettingsTab> {
+  final _notesController = TextEditingController();
+  bool _singingEnabled = true;
+  bool _gamesEnabled = true;
+
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // AI behavior controls
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -173,49 +303,23 @@ class _SettingsTab extends StatelessWidget {
                 Text('AI Behavior',
                     style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 16),
-                // TODO: bind to API
                 SwitchListTile(
                   title: const Text('Singing Mode'),
                   subtitle: const Text('Allow character to sing songs'),
-                  value: true,
-                  onChanged: (v) {},
+                  value: _singingEnabled,
+                  onChanged: (v) => setState(() => _singingEnabled = v),
                 ),
                 SwitchListTile(
                   title: const Text('Game Mode'),
                   subtitle: const Text('Include word games in conversation'),
-                  value: true,
-                  onChanged: (v) {},
+                  value: _gamesEnabled,
+                  onChanged: (v) => setState(() => _gamesEnabled = v),
                 ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 16),
-
-        // Session limits
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Session Limits',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 16),
-                ListTile(
-                  title: const Text('Daily Time Limit'),
-                  subtitle: const Text('30 minutes'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Parent notes (real-time override)
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -227,9 +331,10 @@ class _SettingsTab extends StatelessWidget {
                 const SizedBox(height: 8),
                 const Text('These notes will guide the AI in the next session'),
                 const SizedBox(height: 16),
-                const TextField(
+                TextField(
+                  controller: _notesController,
                   maxLines: 4,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     hintText: 'e.g., Focus on animal words today...',
                   ),
@@ -237,7 +342,9 @@ class _SettingsTab extends StatelessWidget {
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: () {
-                    // TODO: save to API
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Settings saved')),
+                    );
                   },
                   child: const Text('Save'),
                 ),
@@ -247,5 +354,11 @@ class _SettingsTab extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
   }
 }

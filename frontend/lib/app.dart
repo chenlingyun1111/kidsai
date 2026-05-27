@@ -29,7 +29,11 @@ final _router = GoRouter(
     ),
     GoRoute(
       path: '/chat',
-      builder: (context, state) => const VoiceChatScreen(),
+      builder: (context, state) => VoiceChatScreen(
+        childId: state.uri.queryParameters['child_id'],
+        characterId: state.uri.queryParameters['character_id'],
+        characterName: state.uri.queryParameters['name'],
+      ),
     ),
     GoRoute(
       path: '/characters',
